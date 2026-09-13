@@ -36,7 +36,12 @@ TOKEN="${1:?Usage: sudo bash setup_main_vm_runner.sh <REGISTRATION_TOKEN>}"
 RUNNER_USER="karotki_dzianis"
 RUNNER_DIR="/home/${RUNNER_USER}/actions-runner-ship-sandbox"
 REPO_URL="https://github.com/KarotkiDzianis/ship-sandbox"
-RUNNER_VERSION="2.321.0"
+RUNNER_VERSION="$(curl -sL https://api.github.com/repos/actions/runner/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')"
+if [ -z "$RUNNER_VERSION" ]; then
+  echo "Could not resolve the latest actions/runner version -- check network/GitHub API rate limit." >&2
+  exit 1
+fi
+echo "Using actions-runner version ${RUNNER_VERSION} (resolved from GitHub's latest release)"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run this with sudo (it writes /etc/sudoers.d, /etc/systemd/system, and installs a systemd service)." >&2
