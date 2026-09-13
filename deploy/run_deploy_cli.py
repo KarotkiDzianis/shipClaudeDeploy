@@ -4,8 +4,11 @@ runner invokes (§16/§17 full contract). Combines:
   1. a GitHub Actions job-context guard (§26/§36: "prod runner cannot run
      a PR job") -- refuses if GITHUB_EVENT_NAME looks like untrusted code
   2. shiplib.approval_persistence.is_approved_for() -- refuses unless
-     Telegram recorded an "approved" decision for this EXACT git_sha
-     (§24: a blocked or never-decided release must never deploy)
+     an "approved" decision was recorded for this EXACT git_sha (§24: a
+     blocked or never-decided release must never deploy). Skipped only
+     when the CENTRAL REGISTRY (never project.yml) sets this project's
+     `approval: automatic` -- e.g. a sandbox/test project with no human
+     in the loop by design.
   3. shiplib.registry.authorize_deploy() -- fail-closed re-validation
   4. shiplib.release.run_deploy() -- install/verify/switch/restart/health
      with automatic rollback (and rollback-health-recheck) on any failure
@@ -70,6 +73,10 @@ def main() -> int:
     ap.add_argument("--git-sha", required=True)
     ap.add_argument("--artifact-sha256", required=True)
     ap.add_argument("--artifact-path", required=True)
+    ap.add_argument("--project-dir", default=".",
+                    help="where this project's OWN checkout lives on the runner "
+                         "(scripts/ship/health is run from here) -- defaults to cwd, "
+                         "i.e. wherever the calling workflow checked the project out")
     args = ap.parse_args()
 
     untrusted_reason = _refuse_if_untrusted_job_context()
@@ -91,14 +98,24 @@ def main() -> int:
         print(json.dumps({"status": "REFUSED", "reason": str(e)}, indent=2))
         return 1
 
-    approved, reason = is_approved_for(auth["release_root"], args.project, args.git_sha)
-    if not approved:
-        print(json.dumps({"status": "REFUSED", "reason": f"no valid Telegram approval: {reason}"}, indent=2))
-        return 1
+    # Approval mode is a CENTRAL REGISTRY decision, not project.yml's own
+    # claim (same fail-closed principle as everything else authorize_deploy
+    # checks) -- a project cannot grant itself "automatic" by editing its
+    # own project.yml. Default to the strictest mode ("telegram") when the
+    # registry entry doesn't say, so a project must be explicitly opted
+    # into anything weaker.
+    approval_mode = entry.get("approval", "telegram")
+    if approval_mode == "automatic":
+        pass  # deliberately no approval gate -- registry opted this project in
+    else:
+        approved, reason = is_approved_for(auth["release_root"], args.project, args.git_sha)
+        if not approved:
+            print(json.dumps({"status": "REFUSED", "reason": f"no valid approval: {reason}"}, indent=2))
+            return 1
 
     manifest = {"release_id": args.git_sha, "project": args.project, "git_sha": args.git_sha,
                "artifact_sha256": args.artifact_sha256}
-    project_dir = Path(__file__).resolve().parent.parent.parent.parent / entry["path"]
+    project_dir = Path(args.project_dir).resolve()
 
     result = release.run_deploy(
         auth["release_root"], args.project, args.git_sha, args.artifact_path, args.artifact_sha256, manifest,

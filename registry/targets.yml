@@ -6,13 +6,16 @@
 # service against THIS file at deploy time (never trusts the calling
 # workflow's own inputs alone) -- see docs/SHIP_SECURITY.md.
 #
-# STATUS (2026-09-13, Ship V0 foundation pass): `main-vm` below is a
-# DESIGN placeholder. No self-hosted runner is installed anywhere, no
-# runner labels are registered with any real GitHub repo, and no VM is
-# connected to this pipeline. Nothing deploys until all three of
-# (a) a real GitHub repo, (b) a registered self-hosted runner with these
-# exact labels, and (c) an explicit decision to flip a project's own
-# deploy.enabled to true actually happen -- none have happened yet.
+# STATUS (2026-09-13): `main-vm` is the same real prod VM TradePulse and
+# another bot already run on (Dzianis's explicit decision -- one machine,
+# isolated per-service systemd units, restart is always scoped to the
+# ONE named service, never the VM itself). `ship-sandbox` is the first
+# project actually onboarded, specifically to prove the pipeline
+# mechanically before any real project goes through it (see that
+# project's own CLAUDE.md). tradepulse/stroytender-by stay listed as
+# design placeholders -- their own registry entries still refuse (see
+# projects.yml, `repo: "TBD"`) until each is a separate, later, explicit
+# decision.
 
 main-vm:
   runner_labels:
@@ -21,5 +24,6 @@ main-vm:
     - ship-prod
   release_root: /srv/apps
   allowed_projects:
+    - ship-sandbox
     - tradepulse
     - stroytender-by

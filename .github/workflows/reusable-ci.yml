@@ -5,10 +5,20 @@ name: Ship Reusable CI
 # Runs on GitHub-hosted runners only -- PR/untrusted code never touches
 # the self-hosted deploy runner (§11/§26 of the Ship spec).
 #
-# STATUS (2026-09-13): authored, not yet exercised against a real
-# repository -- this workspace has no git repo yet (see docs/
-# SHIP_V0_ARCHITECTURE.md "Known gaps"). Every step below is designed to
-# be boring and inspectable rather than clever.
+# Each project lives in its OWN separate git repository (not a shared
+# monorepo) -- `actions/checkout@v4` with no `path:` therefore checks the
+# CALLING project out at the job's workspace root, so `project.yml` and
+# `scripts/ship/*` are always at `./`. `platform/ship` itself is a
+# SEPARATE repo (KarotkiDzianis/shipClaudeDeploy) and is checked out into
+# a `platform/ship` subdirectory below, pinned to the exact commit the
+# calling project's own ship.yml is pinned to -- keep this ref in sync
+# with that pin whenever it's bumped (see ship.yml's own comment).
+#
+# STATUS (2026-09-13): exercised for the first time against a real
+# repository (ship-sandbox) as part of Ship V0's first live E2E test.
+
+env:
+  SHIP_REF: 5b87ce0
 
 on:
   workflow_call:
@@ -27,37 +37,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: KarotkiDzianis/shipClaudeDeploy
+          ref: ${{ env.SHIP_REF }}
+          path: platform/ship
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install Ship
         run: pip install -r platform/ship/requirements.txt
-      - name: Resolve project directory from the central registry
-        id: resolve
+      - name: Confirm this project slug is registered in the central registry
         run: |
           PYTHONPATH=platform/ship python3 -c "
           from shiplib.registry import load_projects
           projects = load_projects()
-          entry = projects['${{ inputs.project_slug }}']
-          print(f'project_dir={entry[\"path\"]}')
-          " >> "$GITHUB_OUTPUT"
+          assert '${{ inputs.project_slug }}' in projects, \
+              \"'${{ inputs.project_slug }}' is not in registry/projects.yml -- refusing\"
+          print('project is registered')
+          "
       - name: Validate project.yml against the schema
         run: |
           PYTHONPATH=platform/ship python3 -c "
           from shiplib.schema import load_project_config
-          load_project_config('${{ steps.resolve.outputs.project_dir }}/project.yml')
+          load_project_config('project.yml')
           print('project.yml is valid')
           "
-    outputs:
-      project_dir: ${{ steps.resolve.outputs.project_dir }}
 
   test:
     needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run common contract test + project-specific tests
-        working-directory: ${{ needs.validate.outputs.project_dir }}
+      - name: Run this project's own tests
         run: bash scripts/ship/test
 
   build:
@@ -71,16 +83,13 @@ jobs:
       - id: sha
         run: echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Build
-        working-directory: ${{ needs.validate.outputs.project_dir }}
         run: bash scripts/ship/build
       - name: Package (tar the build output as artifact.tar.gz)
-        working-directory: ${{ needs.validate.outputs.project_dir }}
         run: tar czf artifact.tar.gz -C build .
       - id: hash
-        working-directory: ${{ needs.validate.outputs.project_dir }}
         run: echo "sha256=$(sha256sum artifact.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: ship-artifact-${{ inputs.project_slug }}
-          path: ${{ needs.validate.outputs.project_dir }}/artifact.tar.gz
+          path: artifact.tar.gz
           retention-days: 30

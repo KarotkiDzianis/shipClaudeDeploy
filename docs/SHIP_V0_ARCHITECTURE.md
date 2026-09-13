@@ -36,7 +36,7 @@ platform/ship/
 │   ├── client.py                 real Telegram Bot API HTTP calls (untested -- no token)
 │   └── bot.py                    message/pin/edit orchestration (tested with a fake client)
 ├── .github/workflows/            reusable-ci.yml, reusable-release.yml, reusable-deploy.yml
-├── tests/                        57/57 passing, see "Known gaps" for what ISN'T covered
+├── tests/                        63/63 passing, see "Known gaps" for what ISN'T covered
 └── docs/                         this file + 5 more (see index below)
 ```
 
@@ -48,7 +48,7 @@ platform/ship/
 - `SHIP_DEPLOYMENT.md` — the full deploy contract and auto-rollback conditions
 - `SHIP_SECURITY.md` — the central-registry threat model, secrets policy
 
-## What is genuinely BUILT and TESTED (2026-09-13, 57/57 passing)
+## What is genuinely BUILT and TESTED (2026-09-13, 63/63 passing)
 
 - Schema validation (fail-closed, unknown fields rejected) — 10 tests
 - Central registry authorization (wrong repo/service/target/path-traversal all rejected) — 8 tests
@@ -84,45 +84,58 @@ These are not oversights; §34 of the originating spec explicitly scoped
 this pass to foundation-only. Each is a deliberate stop point, documented
 so a future session knows exactly where to pick up rather than guessing:
 
-1. ~~No git repository exists anywhere in this workspace~~ **RESOLVED
-   2026-09-13**: `platform/ship` is now a real git repo, pushed to
-   `https://github.com/KarotkiDzianis/shipClaudeDeploy` (SSH auth, key
-   added to the GitHub account). `projects/template/.github/workflows/
-   ship.yml` is pinned to commit `5b87ce0`. Nothing in `.github/
-   workflows/` has actually EXECUTED on GitHub yet, though — no workflow
-   run has ever fired (no project has pushed a commit through this yet).
-   `gh` CLI is still not installed on this machine (not needed for the
-   push itself, SSH was sufficient). TradePulse's own directory is still
-   NOT a git repository — unaffected either way, per §34.
-2. **`shiplib.release_ready_cli`, `shiplib.registry_check`,
-   `shiplib.deploy_result_cli`** are referenced by the reusable workflows
-   but not written — they're thin glue around already-built-and-tested
-   logic (`ShipTelegramBot.announce_release_ready`, `authorize_deploy`,
-   a result-formatting call), deliberately not built because there is no
-   real Telegram bot token or real workflow run to test them against yet;
-   writing them now would be untested glue, not a build. What IS built and
-   tested: the approval decision itself is now persisted
-   (`shiplib/approval_persistence.py`) and actually checked by
-   `deploy/run_deploy_cli.py` before it will deploy anything — the only
-   missing piece is the real webhook/polling receiver that turns an
-   incoming Telegram button tap into a call to `ShipTelegramBot.
-   handle_callback()`.
-3. **No self-hosted runner is registered anywhere** (targets.yml's
-   `main-vm` is a design placeholder, see that file's own header).
-4. **A real, dedicated Ship bot token now exists** (`SHIP_CLAUDE_DEPLOY_BOT`
-   in `~/claude/.env`, distinct from TradePulse's own `TRAIDZ_BOT_TOKEN`
-   and the unrelated `TELEGRAM_BOT_TOKEN` already used by 3 other
-   projects — deliberately not reused, per §18). Still UNVERIFIED from
-   Claude's own side: this session's sandboxed shell can reach
-   `github.com`/`1.1.1.1`/`telegram.org` but specifically NOT
-   `api.telegram.org` (confirmed via direct connectivity tests — HTTP 000
-   on that one host only). `scripts/smoke_test_telegram.py` is written and
-   ready; it must be run by Dzianis on his own machine, not through
-   Claude's sandbox.
-5. **`registry/projects.yml`'s `repo:` fields are literal `"TBD"` values**
-   — `authorize_deploy()` explicitly refuses to authorize a deploy while
-   this is true (see `test_unregistered_repo_placeholder_refused`) — this
-   is enforced, not just documented.
+1. **RESOLVED 2026-09-13**: `platform/ship` is a real git repo
+   (`https://github.com/KarotkiDzianis/shipClaudeDeploy`, SSH auth). A
+   second, separate real repo, `https://github.com/KarotkiDzianis/
+   ship-sandbox`, is the first project actually onboarded — a disposable
+   app built specifically to prove the pipeline mechanically (see its own
+   CLAUDE.md) before any real project goes through it. Each project is
+   its OWN git repo, not a shared monorepo — `reusable-ci.yml`/
+   `reusable-deploy.yml`/`reusable-release.yml` check platform/ship out
+   into a `platform/ship` subdirectory at a pinned commit (env
+   `SHIP_REF`), separately from the calling project's own default
+   checkout; this was a real design gap found and fixed this session
+   (the original versions assumed platform/ship was already present in
+   the calling job's own checkout, which is only true in a monorepo).
+   TradePulse's own directory is still NOT a git repository — unaffected
+   either way, per §34.
+2. **`shiplib.registry_check` and `shiplib.deploy_result_cli` are now
+   written and tested** (`tests/test_registry_check_cli.py`,
+   `tests/test_deploy_result_cli.py`) — thin, real CLIs, not just
+   documented intent. `shiplib.release_ready_cli` (the Telegram
+   announce-and-wait-for-approval step) is still NOT written — ship-sandbox
+   deliberately skips it (`approval: automatic` in the registry, not
+   project.yml — see `deploy/run_deploy_cli.py`), so the first real E2E
+   test proves install/verify/switch/restart/health/rollback mechanics
+   work on a real VM, independent of the still-unbuilt Telegram
+   webhook/polling receiver that would turn a button tap into
+   `ShipTelegramBot.handle_callback()`. That receiver, `release_ready_cli`,
+   and wiring a real Telegram-gated project remain the next, separate step.
+3. **A self-hosted runner is being registered on the real prod VM**
+   (the same VM TradePulse and another bot already run on — Dzianis's
+   explicit decision, confirmed 2026-09-13: one isolated systemd unit per
+   project, restart always scoped to that one named service, never the
+   VM itself; see `registry/targets.yml`'s own header and
+   `deploy/ship-sandbox.service`).
+4. **RESOLVED 2026-09-13**: a real, dedicated Ship bot token exists
+   (`SHIP_CLAUDE_DEPLOY_BOT` in `~/claude/.env`, distinct from
+   TradePulse's own `TRAIDZ_BOT_TOKEN` and the unrelated
+   `TELEGRAM_BOT_TOKEN` already used by 3 other projects — deliberately
+   not reused, per §18) and is now VERIFIED WORKING: Dzianis ran
+   `scripts/smoke_test_telegram.py` on his own machine (Claude's sandbox
+   cannot reach `api.telegram.org` — confirmed separately, HTTP 000 on
+   that one host only, unrelated to the token). Real result: `getMe`
+   confirmed the token is valid (`@SHIP_CLAUDE_DEPLOY_BOT`), and a real
+   message was sent successfully (`message_id=2`). Delivery into the
+   actual Telegram chat still pending Dzianis's confirmation — the bot
+   can only message a chat that has sent it `/start` at least once.
+   Still not wired: no webhook/polling receiver exists yet to turn a real
+   button tap into `ShipTelegramBot.handle_callback()` (see gap #2).
+5. **`registry/projects.yml`'s `repo:` fields for tradepulse/stroytender-by
+   are still literal `"TBD"` values** — `authorize_deploy()` explicitly
+   refuses to authorize a deploy while this is true (see
+   `test_unregistered_repo_placeholder_refused`), enforced, not just
+   documented. `ship-sandbox`'s own entry now has a real repo.
 6. **TradePulse has not adopted `project.yml`** — `ship status tradepulse`
    correctly reports `NOT_ADOPTED`, not an error. TradePulse's existing
    Rule 10 manual-deploy process is completely unaffected either way.

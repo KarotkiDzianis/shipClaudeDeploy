@@ -8,6 +8,9 @@ name: Ship Reusable Release
 # STATUS (2026-09-13): authored, not yet exercised against a real
 # repository or a real Telegram bot token.
 
+env:
+  SHIP_REF: 5b87ce0
+
 on:
   workflow_call:
     inputs:
@@ -35,6 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: KarotkiDzianis/shipClaudeDeploy
+          ref: ${{ env.SHIP_REF }}
+          path: platform/ship
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

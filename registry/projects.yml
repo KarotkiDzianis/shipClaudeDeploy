@@ -17,6 +17,18 @@
 # `main-vm` (see targets.yml) and TradePulse's own project.yml sets
 # `deploy.enabled: true` -- a deliberate, separate, later decision.
 
+ship-sandbox:
+  path: projects/personal/ship-sandbox
+  repo: "KarotkiDzianis/ship-sandbox"
+  deployment_allowed: true
+  target: main-vm
+  service: ship-sandbox.service
+  # approval is a CENTRAL REGISTRY decision (see deploy/run_deploy_cli.py)
+  # -- this project's own project.yml cannot grant itself this. Disposable
+  # sandbox project, explicitly no human in the loop by design (2026-09-13,
+  # first real Ship V0 E2E test, see that project's own CLAUDE.md).
+  approval: automatic
+
 tradepulse:
   path: projects/commercial/tradepulse
   # No git repository exists for this project yet (confirmed 2026-09-13:
@@ -26,6 +38,7 @@ tradepulse:
   deployment_allowed: true
   target: main-vm
   service: tradepulse.service
+  approval: telegram
 
 stroytender-by:
   path: projects/commercial/stroytender-by
@@ -33,3 +46,4 @@ stroytender-by:
   deployment_allowed: true
   target: main-vm
   service: stroytender-by.service
+  approval: telegram
