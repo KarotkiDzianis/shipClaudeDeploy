@@ -84,11 +84,16 @@ These are not oversights; §34 of the originating spec explicitly scoped
 this pass to foundation-only. Each is a deliberate stop point, documented
 so a future session knows exactly where to pick up rather than guessing:
 
-1. **No git repository exists anywhere in this workspace** (confirmed:
-   `git rev-parse --is-inside-work-tree` fails at both `~/claude` and
-   `~/claude/projects/commercial/tradepulse`). Nothing in `.github/
-   workflows/` has ever run — GitHub Actions requires an actual GitHub
-   repo. `gh` CLI is also not installed on this machine.
+1. ~~No git repository exists anywhere in this workspace~~ **RESOLVED
+   2026-09-13**: `platform/ship` is now a real git repo, pushed to
+   `https://github.com/KarotkiDzianis/shipClaudeDeploy` (SSH auth, key
+   added to the GitHub account). `projects/template/.github/workflows/
+   ship.yml` is pinned to commit `5b87ce0`. Nothing in `.github/
+   workflows/` has actually EXECUTED on GitHub yet, though — no workflow
+   run has ever fired (no project has pushed a commit through this yet).
+   `gh` CLI is still not installed on this machine (not needed for the
+   push itself, SSH was sufficient). TradePulse's own directory is still
+   NOT a git repository — unaffected either way, per §34.
 2. **`shiplib.release_ready_cli`, `shiplib.registry_check`,
    `shiplib.deploy_result_cli`** are referenced by the reusable workflows
    but not written — they're thin glue around already-built-and-tested
@@ -104,9 +109,16 @@ so a future session knows exactly where to pick up rather than guessing:
    handle_callback()`.
 3. **No self-hosted runner is registered anywhere** (targets.yml's
    `main-vm` is a design placeholder, see that file's own header).
-4. **No real Telegram bot token / chat exists.** `telegram/approval_bot/
-   client.py` is real, correct-looking code but has never made a real
-   HTTP call to api.telegram.org.
+4. **A real, dedicated Ship bot token now exists** (`SHIP_CLAUDE_DEPLOY_BOT`
+   in `~/claude/.env`, distinct from TradePulse's own `TRAIDZ_BOT_TOKEN`
+   and the unrelated `TELEGRAM_BOT_TOKEN` already used by 3 other
+   projects — deliberately not reused, per §18). Still UNVERIFIED from
+   Claude's own side: this session's sandboxed shell can reach
+   `github.com`/`1.1.1.1`/`telegram.org` but specifically NOT
+   `api.telegram.org` (confirmed via direct connectivity tests — HTTP 000
+   on that one host only). `scripts/smoke_test_telegram.py` is written and
+   ready; it must be run by Dzianis on his own machine, not through
+   Claude's sandbox.
 5. **`registry/projects.yml`'s `repo:` fields are literal `"TBD"` values**
    — `authorize_deploy()` explicitly refuses to authorize a deploy while
    this is true (see `test_unregistered_repo_placeholder_refused`) — this
