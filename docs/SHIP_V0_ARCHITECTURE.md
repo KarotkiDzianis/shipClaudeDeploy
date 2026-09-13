@@ -116,7 +116,13 @@ so a future session knows exactly where to pick up rather than guessing:
    explicit decision, confirmed 2026-09-13: one isolated systemd unit per
    project, restart always scoped to that one named service, never the
    VM itself; see `registry/targets.yml`'s own header and
-   `deploy/ship-sandbox.service`).
+   `deploy/ship-sandbox.service`). Setup is one script Dzianis runs
+   himself on the VM (`deploy/setup_main_vm_runner.sh` — sudoers scoped
+   to exactly `systemctl restart ship-sandbox.service`, nothing else;
+   Claude never SSHes in, per Rule 10). Known limitation, not fixed here:
+   the runner registers against the ship-sandbox REPO specifically — a
+   future project in its own separate repo will need its own
+   registration, or an org-level runner pool, when it actually onboards.
 4. **RESOLVED 2026-09-13**: a real, dedicated Ship bot token exists
    (`SHIP_CLAUDE_DEPLOY_BOT` in `~/claude/.env`, distinct from
    TradePulse's own `TRAIDZ_BOT_TOKEN` and the unrelated
