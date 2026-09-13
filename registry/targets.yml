@@ -1,0 +1,25 @@
+# platform/ship/registry/targets.yml
+#
+# Deployment targets. A target names a self-hosted runner pool + the
+# release layout it enforces + which projects it will accept a deploy for.
+# The runner itself validates repo/project-slug/target/release-root/
+# service against THIS file at deploy time (never trusts the calling
+# workflow's own inputs alone) -- see docs/SHIP_SECURITY.md.
+#
+# STATUS (2026-09-13, Ship V0 foundation pass): `main-vm` below is a
+# DESIGN placeholder. No self-hosted runner is installed anywhere, no
+# runner labels are registered with any real GitHub repo, and no VM is
+# connected to this pipeline. Nothing deploys until all three of
+# (a) a real GitHub repo, (b) a registered self-hosted runner with these
+# exact labels, and (c) an explicit decision to flip a project's own
+# deploy.enabled to true actually happen -- none have happened yet.
+
+main-vm:
+  runner_labels:
+    - self-hosted
+    - linux
+    - ship-prod
+  release_root: /srv/apps
+  allowed_projects:
+    - tradepulse
+    - stroytender-by

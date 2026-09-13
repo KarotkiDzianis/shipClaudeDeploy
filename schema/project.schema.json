@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://claude-workspace.local/ship/project.schema.json",
+  "title": "Ship project.yml contract",
+  "description": "Machine passport for one project. No secrets allowed here -- see docs/SHIP_SECURITY.md. Unknown fields and invalid values both FAIL validation (fail-closed).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project", "context", "skills", "ci", "deploy", "health"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "name", "type", "repo"],
+      "properties": {
+        "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$", "minLength": 2, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "type": { "enum": ["commercial", "personal"] },
+        "repo": { "type": "string", "minLength": 1 }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claude_rules", "memory_index"],
+      "properties": {
+        "claude_rules": { "type": "string" },
+        "memory_index": { "type": "string" },
+        "project_goals": { "type": "string" },
+        "decisions": { "type": "string" },
+        "blockers": { "type": "string" },
+        "graph": { "type": "string" }
+      }
+    },
+    "skills": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preferred", "domains"],
+      "properties": {
+        "preferred": { "type": "array", "items": { "type": "string" } },
+        "domains": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test", "build"],
+      "properties": {
+        "test": { "type": "string", "minLength": 1 },
+        "build": { "type": "string", "minLength": 1 }
+      }
+    },
+    "deploy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "approval"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "approval": { "enum": ["telegram", "automatic", "manual"] },
+        "target": { "type": "string" },
+        "service": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "enabled": { "const": true } } },
+          "then": { "required": ["enabled", "approval", "target", "service"] }
+        }
+      ]
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

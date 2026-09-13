@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""platform/ship/cli/ship — thin executable wrapper. All logic lives in
+shiplib/cli.py so it stays directly testable.
+
+    PYTHONPATH=.. .venv/bin/python cli/ship status <project>
+    PYTHONPATH=.. .venv/bin/python cli/ship context <project>
+"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from shiplib.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

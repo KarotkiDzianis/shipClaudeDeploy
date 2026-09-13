@@ -1,0 +1,70 @@
+name: Ship Reusable Deploy
+
+# Runs ONLY on the self-hosted deploy runner (§26/§27) -- never on a
+# GitHub-hosted runner, never for a PR/untrusted-code job. Triggered only
+# after a Telegram approval decision (§18-25) has recorded "approved" for
+# this exact (project, release_id, nonce).
+#
+# STATUS (2026-09-13): authored, not yet exercised -- no self-hosted
+# runner is registered anywhere yet (see registry/targets.yml's own
+# status note). Every step below re-validates against the central
+# registry (shiplib.registry.authorize_deploy) rather than trusting these
+# workflow inputs on their own -- §27 "server side allowlist": even a
+# compromised project.yml or a forged workflow input cannot grant a
+# deploy the registry itself doesn't authorize.
+
+on:
+  workflow_call:
+    inputs:
+      project_slug:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      artifact_sha256:
+        required: true
+        type: string
+      release_id:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, ship-prod]
+    steps:
+      - name: Download the exact artifact this release_id was approved for
+        uses: actions/download-artifact@v4
+        with:
+          name: ship-artifact-${{ inputs.project_slug }}
+
+      - name: Re-validate against the central registry (fail closed)
+        run: |
+          PYTHONPATH=platform/ship python3 -m shiplib.registry_check \
+            --project "${{ inputs.project_slug }}" \
+            --git-sha "${{ inputs.git_sha }}"
+          # See docs/SHIP_V0_ARCHITECTURE.md "Known gaps": `shiplib.
+          # registry_check` is a thin CLI wrapper around the already-built
+          # and tested `shiplib.registry.authorize_deploy()` (see tests/
+          # test_registry.py, 8/8 passing) -- not written as a standalone
+          # CLI entrypoint yet because there is no real runner to invoke
+          # it from in this pass.
+
+      - name: Install + verify + switch + restart + health (atomic, auto-rollback on any failure)
+        run: |
+          PYTHONPATH=platform/ship python3 deploy/run_deploy_cli.py \
+            --project "${{ inputs.project_slug }}" \
+            --git-sha "${{ inputs.git_sha }}" \
+            --artifact-sha256 "${{ inputs.artifact_sha256 }}" \
+            --artifact-path ship-artifact-${{ inputs.project_slug }}/artifact.tar.gz
+          # Wraps shiplib.release.run_deploy() (built + tested, see
+          # tests/test_release.py, 9/9 passing including restart-failure-
+          # triggers-rollback and health-failure-triggers-rollback) with
+          # the project's OWN scripts/ship/health as health_fn and a
+          # `systemctl restart <service>` (from the registry-authorized
+          # service name only) as restart_fn.
+
+      - name: Post Telegram result (success or rollback)
+        run: |
+          PYTHONPATH=platform/ship python3 -m shiplib.deploy_result_cli \
+            --project "${{ inputs.project_slug }}"

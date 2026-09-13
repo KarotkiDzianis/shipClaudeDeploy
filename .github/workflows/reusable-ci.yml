@@ -1,0 +1,86 @@
+name: Ship Reusable CI
+
+# Called by a project's own thin .github/workflows/ship.yml via
+# `uses: <org>/ship@<pinned-sha>/.github/workflows/reusable-ci.yml`.
+# Runs on GitHub-hosted runners only -- PR/untrusted code never touches
+# the self-hosted deploy runner (§11/§26 of the Ship spec).
+#
+# STATUS (2026-09-13): authored, not yet exercised against a real
+# repository -- this workspace has no git repo yet (see docs/
+# SHIP_V0_ARCHITECTURE.md "Known gaps"). Every step below is designed to
+# be boring and inspectable rather than clever.
+
+on:
+  workflow_call:
+    inputs:
+      project_slug:
+        required: true
+        type: string
+    outputs:
+      artifact_sha256:
+        value: ${{ jobs.build.outputs.artifact_sha256 }}
+      git_sha:
+        value: ${{ jobs.build.outputs.git_sha }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ship
+        run: pip install -r platform/ship/requirements.txt
+      - name: Resolve project directory from the central registry
+        id: resolve
+        run: |
+          PYTHONPATH=platform/ship python3 -c "
+          from shiplib.registry import load_projects
+          projects = load_projects()
+          entry = projects['${{ inputs.project_slug }}']
+          print(f'project_dir={entry[\"path\"]}')
+          " >> "$GITHUB_OUTPUT"
+      - name: Validate project.yml against the schema
+        run: |
+          PYTHONPATH=platform/ship python3 -c "
+          from shiplib.schema import load_project_config
+          load_project_config('${{ steps.resolve.outputs.project_dir }}/project.yml')
+          print('project.yml is valid')
+          "
+    outputs:
+      project_dir: ${{ steps.resolve.outputs.project_dir }}
+
+  test:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run common contract test + project-specific tests
+        working-directory: ${{ needs.validate.outputs.project_dir }}
+        run: bash scripts/ship/test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_sha256: ${{ steps.hash.outputs.sha256 }}
+      git_sha: ${{ steps.sha.outputs.git_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: sha
+        run: echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build
+        working-directory: ${{ needs.validate.outputs.project_dir }}
+        run: bash scripts/ship/build
+      - name: Package (tar the build output as artifact.tar.gz)
+        working-directory: ${{ needs.validate.outputs.project_dir }}
+        run: tar czf artifact.tar.gz -C build .
+      - id: hash
+        working-directory: ${{ needs.validate.outputs.project_dir }}
+        run: echo "sha256=$(sha256sum artifact.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ship-artifact-${{ inputs.project_slug }}
+          path: ${{ needs.validate.outputs.project_dir }}/artifact.tar.gz
+          retention-days: 30

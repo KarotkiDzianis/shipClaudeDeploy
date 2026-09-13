@@ -1,0 +1,61 @@
+name: Ship Reusable Release
+
+# Builds the immutable release object (§14) and posts the Telegram
+# approval message (§19/§20). Runs entirely on GitHub-hosted runners --
+# this workflow NEVER touches the deploy target itself; it only asks for
+# permission to.
+#
+# STATUS (2026-09-13): authored, not yet exercised against a real
+# repository or a real Telegram bot token.
+
+on:
+  workflow_call:
+    inputs:
+      project_slug:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      artifact_sha256:
+        required: true
+        type: string
+      change_summary:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      SHIP_TELEGRAM_BOT_TOKEN:
+        required: true
+      SHIP_TELEGRAM_CHAT_ID:
+        required: true
+
+jobs:
+  release-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r platform/ship/requirements.txt
+      - name: Build release manifest and announce for approval
+        env:
+          SHIP_TELEGRAM_BOT_TOKEN: ${{ secrets.SHIP_TELEGRAM_BOT_TOKEN }}
+          SHIP_TELEGRAM_CHAT_ID: ${{ secrets.SHIP_TELEGRAM_CHAT_ID }}
+        run: |
+          PYTHONPATH=platform/ship python3 -m shiplib.release_ready_cli \
+            --project "${{ inputs.project_slug }}" \
+            --git-sha "${{ inputs.git_sha }}" \
+            --artifact-sha256 "${{ inputs.artifact_sha256 }}" \
+            --change-summary "${{ inputs.change_summary }}"
+      # NOTE (2026-09-13): `shiplib.release_ready_cli` is documented in
+      # docs/SHIP_TELEGRAM_APPROVAL.md as the next piece to write once a
+      # real bot token exists -- it wires ShipTelegramBot.announce_
+      # release_ready() (already built and tested, see telegram/
+      # approval_bot/bot.py + tests/test_telegram_bot.py) to a real
+      # TelegramClient and to a persisted ApprovalStore (a JSON file next
+      # to state.json, not the in-memory one used in tests). Deliberately
+      # NOT built as a CLI yet -- see docs/SHIP_V0_ARCHITECTURE.md "Known
+      # gaps": doing so without a real token to test against would be a
+      # guess, not a build.

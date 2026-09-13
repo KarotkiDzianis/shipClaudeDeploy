@@ -1,0 +1,35 @@
+# platform/ship/registry/projects.yml
+#
+# CENTRAL AUTHORITY, not project.yml. A project's own project.yml can ASK
+# for deployment (deploy.enabled=true, deploy.target=...), but the deploy
+# runner only ever honors a request that ALSO appears here, for the SAME
+# repo/target/service. A project cannot grant itself new production
+# permission by editing its own project.yml -- see docs/SHIP_SECURITY.md
+# §"server side allowlist". Fail closed: a project/target pair not listed
+# here is refused, never defaulted to "allow".
+#
+# NOTHING here is connected to a real runner or VM yet (2026-09-13, Ship
+# V0 foundation pass). `deployment_allowed: true` is declarative only --
+# it does not deploy anything by itself, and does not change the fact
+# that TradePulse's own Rule 10 (Dzianis deploys manually, one command)
+# still governs TradePulse today. This entry becomes load-bearing only
+# once a real self-hosted runner + Telegram bot are registered for
+# `main-vm` (see targets.yml) and TradePulse's own project.yml sets
+# `deploy.enabled: true` -- a deliberate, separate, later decision.
+
+tradepulse:
+  path: projects/commercial/tradepulse
+  # No git repository exists for this project yet (confirmed 2026-09-13:
+  # `git rev-parse --is-inside-work-tree` fails at both the workspace root
+  # and this project's own directory) -- filled in once one is created.
+  repo: "TBD -- no git repository exists yet"
+  deployment_allowed: true
+  target: main-vm
+  service: tradepulse.service
+
+stroytender-by:
+  path: projects/commercial/stroytender-by
+  repo: "TBD -- no git repository exists yet"
+  deployment_allowed: true
+  target: main-vm
+  service: stroytender-by.service
