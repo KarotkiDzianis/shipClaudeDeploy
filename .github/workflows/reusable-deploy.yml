@@ -20,7 +20,7 @@ name: Ship Reusable Deploy
 # registry itself doesn't authorize.
 
 env:
-  SHIP_REF: 5b87ce0
+  SHIP_REF: 408dc3b
 
 on:
   workflow_call:
