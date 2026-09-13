@@ -9,7 +9,7 @@ name: Ship Reusable Release
 # repository or a real Telegram bot token.
 
 env:
-  SHIP_REF: 408dc3b
+  SHIP_REF: 408dc3bb833f8c7e2cc01790708ba5a5ac099635
 
 on:
   workflow_call:
