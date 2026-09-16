@@ -86,7 +86,7 @@ jobs:
             --project "${{ inputs.project_slug }}" \
             --git-sha "${{ inputs.git_sha }}"
 
-      - name: Wait for Telegram approval (no-ops immediately for a registry `approval: automatic` project)
+      - name: Wait for Telegram approval (skipped immediately for an automatic-approval project)
         run: |
           python3 -m shiplib.wait_for_approval_cli \
             --project "${{ inputs.project_slug }}" \
