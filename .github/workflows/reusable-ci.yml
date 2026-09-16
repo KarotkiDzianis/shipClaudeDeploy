@@ -18,7 +18,7 @@ name: Ship Reusable CI
 # repository (ship-sandbox) as part of Ship V0's first live E2E test.
 
 env:
-  SHIP_REF: 408dc3bb833f8c7e2cc01790708ba5a5ac099635
+  SHIP_REF: 6cf69139d042ade46ba1d5aa1a65303efd48a3e8
 
 on:
   workflow_call:
