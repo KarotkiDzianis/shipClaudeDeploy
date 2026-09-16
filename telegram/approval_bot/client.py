@@ -6,6 +6,8 @@ implementing the same method signatures (see tests/test_telegram_bot.py).
 """
 from __future__ import annotations
 
+import json
+
 import requests
 
 
@@ -28,6 +30,16 @@ class TelegramClient:
 
     def answer_callback_query(self, callback_query_id, text: str = None) -> dict:
         return self._post("answerCallbackQuery", {"callback_query_id": callback_query_id, "text": text})
+
+    def get_updates(self, offset: int = 0, timeout: int = 10) -> dict:
+        """Long-poll for new updates (callback_query events included).
+        `timeout` is Telegram's own long-poll wait (seconds), not just an
+        HTTP client timeout -- the request itself blocks server-side until
+        an update arrives or this elapses."""
+        clean = {"offset": offset, "timeout": timeout, "allowed_updates": json.dumps(["callback_query"])}
+        resp = requests.get(f"{self._base}/getUpdates", params=clean, timeout=timeout + 10)
+        resp.raise_for_status()
+        return resp.json()
 
     def _post(self, method: str, payload: dict) -> dict:
         clean = {k: v for k, v in payload.items() if v is not None}

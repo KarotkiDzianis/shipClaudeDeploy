@@ -1,12 +1,17 @@
 # SHIP TELEGRAM APPROVAL
 
-## Status: protocol built + tested, real bot NOT connected
+## Status: fully wired (2026-09-16), not yet exercised with a real click
 
-`shiplib/telegram_protocol.py` (the state machine) and
-`telegram/approval_bot/bot.py` (the message orchestration) are real,
-tested code — 15 tests total, zero network access, using a fake Telegram
-client. `telegram/approval_bot/client.py` (the real HTTP calls) has never
-been exercised against api.telegram.org — there is no bot token yet.
+`shiplib/telegram_protocol.py` (the state machine), `telegram/
+approval_bot/bot.py` (the message orchestration), `telegram/
+approval_bot/daemon.py` (the persistent process that owns both), `shiplib/
+release_ready_cli.py` (enqueues an announce request) and `shiplib/
+wait_for_approval_cli.py` (the deploy job's gate) are all real, tested
+code. `telegram/approval_bot/client.py`'s `send_message`/`getMe` were
+proven working against the real API by `scripts/smoke_test_telegram.py`;
+`get_updates()` (long-polling) has not yet received a real button tap —
+that's the next real-world verification, once the daemon is running on
+the VM (see "Running it for real" below).
 
 ## One bot, one chat, all projects (§18)
 
@@ -58,18 +63,52 @@ deploy time, not just at the Telegram-button level — tested end to end in
 `tests/test_deploy_cli.py` (refused-without-approval, refused-when-
 blocked, refused-when-sha-mismatched, succeeds-when-approved).
 
-## What's left to actually connect this (not done in this pass, §34)
+## Running it for real: one daemon per VM, not one process per deploy
 
-1. A real bot token + chat id (Telegram secrets, never in `project.yml`
-   or git — see `SHIP_SECURITY.md`).
-2. A real webhook/polling receiver wiring Telegram's actual callback
-   payloads into `ShipTelegramBot.handle_callback()` — the bot and
-   persistence logic above are both real and tested; only the "receive an
-   HTTP update from Telegram and call this function" glue is missing,
-   because there's no real bot to receive updates from yet.
-3. `shiplib.release_ready_cli` / `shiplib.deploy_result_cli` (referenced
-   by the reusable GitHub workflows, not yet written — see
-   `SHIP_V0_ARCHITECTURE.md` "Known gaps").
-4. The persistent Ship dashboard (§21) and pending-release reminders
-   (§22) — designed, not built; they're thin extensions of the same
-   edit-not-recreate pattern already proven in `bot.py`.
+A human's decision is asynchronous — it can arrive minutes or hours after
+a release is announced, long after the GitHub Actions job that announced
+it has finished. So the bot is a SEPARATE, always-running process
+(`telegram/approval_bot/daemon.py`, installed via `deploy/
+setup_approval_daemon.sh` as `ship-approval-bot.service`), not something
+spun up per job:
+
+1. `reusable-release.yml`'s `release-ready` job (now `runs-on:
+   [self-hosted, ...]`, not GitHub-hosted) calls `shiplib.
+   release_ready_cli`, which drops a JSON "please announce this" request
+   into `<release_root>/_telegram_queue/` — a plain file, because this
+   job and the daemon share the SAME VM's filesystem.
+2. The daemon picks up the file, calls `announce_release_ready()` for
+   real, deletes the file.
+3. The daemon also long-polls `getUpdates()` in the same loop; a
+   `callback_query` with `data` matching `ship:{project}:{release_id}:
+   {nonce}:{decision}` calls `handle_callback()`, which persists the
+   decision (`shiplib/approval_persistence.py`) if it's valid.
+4. `reusable-deploy.yml`'s deploy job calls `shiplib.
+   wait_for_approval_cli` (polls that persisted file, 30 min default
+   timeout) before `run_deploy_cli.py` — which re-checks the same
+   decision itself anyway (§27 defense in depth).
+
+**The real bot token never becomes a GitHub secret.** Only the daemon's
+own systemd `EnvironmentFile` (`/etc/ship/telegram.env`, created by hand
+on the VM, never in git) holds `SHIP_CLAUDE_DEPLOY_BOT`/
+`TELEGRAM_CHAT_ID_DZIANIS`/`SHIP_ALLOWED_APPROVER_IDS` — a smaller secret
+surface than the original plan (see `SHIP_SECURITY.md`).
+
+## What's still not done
+
+- **A real button tap has never been clicked** — the daemon has not run
+  on the VM yet, so `get_updates()`/`handle_callback()` are tested only
+  against a fake client (`tests/test_approval_daemon.py`,
+  `tests/test_telegram_bot.py`).
+- `SHIP_ALLOWED_APPROVER_IDS` needs Dzianis's real numeric Telegram user
+  id (not the chat id) — obtained once from `getUpdates` after messaging
+  the bot, from his own machine (see the setup script's own header).
+- The persistent Ship dashboard (§21) and pending-release reminders
+  (§22) — designed, not built; thin extensions of the same
+  edit-not-recreate pattern already proven in `bot.py`.
+- `shiplib.deploy_result_cli` still posts the final deploy outcome via
+  its OWN direct Telegram call (a GitHub Actions secret, if configured)
+  rather than through the daemon's queue — inconsistent with the
+  "daemon is the only thing holding the token" principle above, but
+  harmless (no-ops if unconfigured) and not required for the approval
+  flow itself; unifying it is a small follow-up, not done here.

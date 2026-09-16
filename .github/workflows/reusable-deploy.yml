@@ -86,6 +86,20 @@ jobs:
             --project "${{ inputs.project_slug }}" \
             --git-sha "${{ inputs.git_sha }}"
 
+      - name: Wait for Telegram approval (no-ops immediately for a registry `approval: automatic` project)
+        run: |
+          python3 -m shiplib.wait_for_approval_cli \
+            --project "${{ inputs.project_slug }}" \
+            --git-sha "${{ inputs.git_sha }}" \
+            --timeout-seconds 1800
+          # Polls the approval.json the daemon (telegram/approval_bot/
+          # daemon.py, its own systemd service on this same VM) writes
+          # once a human taps a button -- shares this VM's filesystem, not
+          # a network call. 30 minutes; bump if that's too tight in
+          # practice. run_deploy_cli.py below re-checks this independently
+          # (defense in depth, §27) so this step existing is not itself
+          # the security boundary.
+
       - name: Install + verify + switch + restart + health (atomic, auto-rollback on any failure)
         run: |
           python3 platform/ship/deploy/run_deploy_cli.py \

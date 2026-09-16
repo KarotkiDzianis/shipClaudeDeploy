@@ -33,10 +33,11 @@ platform/ship/
 │   ├── install_release.py, verify_release.py, rollback.py   (thin wrappers)
 │   └── run_deploy_cli.py         full install→verify→switch→restart→health→rollback orchestration
 ├── telegram/approval_bot/
-│   ├── client.py                 real Telegram Bot API HTTP calls (untested -- no token)
-│   └── bot.py                    message/pin/edit orchestration (tested with a fake client)
+│   ├── client.py                 real Telegram Bot API HTTP calls (send/edit/pin proven live; get_updates untested live)
+│   ├── bot.py                    message/pin/edit orchestration (tested with a fake client)
+│   └── daemon.py                 persistent process: owns the ApprovalStore + token, one per VM
 ├── .github/workflows/            reusable-ci.yml, reusable-release.yml, reusable-deploy.yml
-├── tests/                        63/63 passing, see "Known gaps" for what ISN'T covered
+├── tests/                        74/74 passing, see "Known gaps" for what ISN'T covered
 └── docs/                         this file + 5 more (see index below)
 ```
 
@@ -48,7 +49,7 @@ platform/ship/
 - `SHIP_DEPLOYMENT.md` — the full deploy contract and auto-rollback conditions
 - `SHIP_SECURITY.md` — the central-registry threat model, secrets policy
 
-## What is genuinely BUILT and TESTED (2026-09-13, 63/63 passing)
+## What is genuinely BUILT and TESTED (2026-09-16, 74/74 passing)
 
 - Schema validation (fail-closed, unknown fields rejected) — 10 tests
 - Central registry authorization (wrong repo/service/target/path-traversal all rejected) — 8 tests
@@ -99,18 +100,27 @@ so a future session knows exactly where to pick up rather than guessing:
    the calling job's own checkout, which is only true in a monorepo).
    TradePulse's own directory is still NOT a git repository — unaffected
    either way, per §34.
-2. **`shiplib.registry_check` and `shiplib.deploy_result_cli` are now
-   written and tested** (`tests/test_registry_check_cli.py`,
-   `tests/test_deploy_result_cli.py`) — thin, real CLIs, not just
-   documented intent. `shiplib.release_ready_cli` (the Telegram
-   announce-and-wait-for-approval step) is still NOT written — ship-sandbox
-   deliberately skips it (`approval: automatic` in the registry, not
-   project.yml — see `deploy/run_deploy_cli.py`), so the first real E2E
-   test proves install/verify/switch/restart/health/rollback mechanics
-   work on a real VM, independent of the still-unbuilt Telegram
-   webhook/polling receiver that would turn a button tap into
-   `ShipTelegramBot.handle_callback()`. That receiver, `release_ready_cli`,
-   and wiring a real Telegram-gated project remain the next, separate step.
+2. **RESOLVED 2026-09-16 — the Telegram approval loop is fully wired.**
+   `shiplib.registry_check`, `shiplib.deploy_result_cli`,
+   `shiplib.release_ready_cli`, `shiplib.wait_for_approval_cli`, and
+   `telegram/approval_bot/daemon.py` (the persistent process that owns
+   the shared `ApprovalStore` + the real bot token — see
+   `SHIP_TELEGRAM_APPROVAL.md` for the full design) are all real,
+   written, tested code (74/74 tests). `reusable-release.yml` now runs on
+   `[self-hosted, ...]` (not GitHub-hosted) so it can drop an announce
+   request where the daemon can see it; `reusable-deploy.yml` gained a
+   "wait for approval" step. ship-sandbox itself still deliberately uses
+   `approval: automatic` (skips this whole path) — that first E2E test
+   proved deploy mechanics independent of Telegram, on purpose (§35
+   staged rollout). NOT yet proven: the daemon has never run on the real
+   VM, so no real button tap has been received end to end (only tested
+   against a fake client). Getting there needs: `deploy/
+   setup_approval_daemon.sh` run once on the VM, a real
+   `/etc/ship/telegram.env` (bot token, chat id, Dzianis's numeric
+   Telegram user id), and a real Telegram-gated project pointed at it —
+   TradePulse/stroytender-by still have `repo: "TBD"` in the registry, so
+   neither can deploy yet regardless (§34/§35: a separate, later,
+   deliberate decision).
 3. **RESOLVED 2026-09-16 — FIRST REAL END-TO-END DEPLOY SUCCEEDED.** A
    self-hosted runner is registered on the real prod VM (the same VM
    TradePulse and another bot already run on — Dzianis's explicit

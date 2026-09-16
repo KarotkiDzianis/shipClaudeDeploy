@@ -53,10 +53,16 @@ artifact. The schema (`schema/project.schema.json`) has
 accidentally added as an "extra field" fails validation loudly instead of
 silently shipping.
 
-**Where real secrets live** (once they exist — none do yet, see
-`SHIP_V0_ARCHITECTURE.md` "Known gaps"):
-- Telegram bot token + chat id → GitHub Actions secrets
-  (`SHIP_TELEGRAM_BOT_TOKEN`/`SHIP_TELEGRAM_CHAT_ID`), never checked in.
+**Where real secrets live:**
+- Telegram bot token + chat id + allowed approver ids → **not a GitHub
+  secret at all** (revised 2026-09-16 from the original plan below): only
+  `telegram/approval_bot/daemon.py`'s own systemd `EnvironmentFile`
+  (`/etc/ship/telegram.env` on the VM, created by hand, never in git)
+  holds them. The daemon is the ONE long-running process that announces
+  releases and receives button taps (see `SHIP_TELEGRAM_APPROVAL.md`) —
+  GitHub Actions jobs only ever drop/read plain JSON files on the shared
+  VM filesystem, never touching the token. Smaller secret surface than
+  routing it through CI at all.
 - GitHub authentication → prefer a GitHub App with minimum permissions
   over a personal access token (§25); the app requests/dispatches only
   the specific approved deployment.

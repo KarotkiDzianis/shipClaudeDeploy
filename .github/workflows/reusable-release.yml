@@ -1,12 +1,19 @@
 name: Ship Reusable Release
 
-# Builds the immutable release object (§14) and posts the Telegram
-# approval message (§19/§20). Runs entirely on GitHub-hosted runners --
-# this workflow NEVER touches the deploy target itself; it only asks for
-# permission to.
+# Enqueues a "please announce this release for Telegram approval"
+# request (§14/§19/§20) -- the actual Telegram call is made by the
+# approval daemon (telegram/approval_bot/daemon.py), a separate
+# long-running systemd service on the SAME self-hosted VM, not by this
+# job. That's why this runs on [self-hosted] rather than GitHub-hosted:
+# the request is a JSON file dropped where the daemon can see it,
+# because a human's decision is asynchronous and can arrive long after
+# this job itself has finished. It also means the real bot token is
+# NEVER a GitHub secret -- only the daemon's own systemd environment
+# holds it (see SHIP_SECURITY.md).
 #
-# STATUS (2026-09-13): authored, not yet exercised against a real
-# repository or a real Telegram bot token.
+# Each project is its own separate git repo (see reusable-ci.yml's own
+# comment) -- platform/ship is checked out into its own subdirectory at
+# a pinned commit, same pattern as reusable-deploy.yml.
 
 env:
   SHIP_REF: 408dc3bb833f8c7e2cc01790708ba5a5ac099635
@@ -27,15 +34,10 @@ on:
         required: false
         type: string
         default: ""
-    secrets:
-      SHIP_TELEGRAM_BOT_TOKEN:
-        required: true
-      SHIP_TELEGRAM_CHAT_ID:
-        required: true
 
 jobs:
   release-ready:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, ship-prod]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -43,27 +45,19 @@ jobs:
           repository: KarotkiDzianis/shipClaudeDeploy
           ref: ${{ env.SHIP_REF }}
           path: platform/ship
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r platform/ship/requirements.txt
-      - name: Build release manifest and announce for approval
-        env:
-          SHIP_TELEGRAM_BOT_TOKEN: ${{ secrets.SHIP_TELEGRAM_BOT_TOKEN }}
-          SHIP_TELEGRAM_CHAT_ID: ${{ secrets.SHIP_TELEGRAM_CHAT_ID }}
+
+      - name: Install Ship's own Python deps (system python3, not actions/setup-python)
         run: |
-          PYTHONPATH=platform/ship python3 -m shiplib.release_ready_cli \
+          # Same fix as reusable-deploy.yml: actions/setup-python has no
+          # prebuilt binary for this VM's OS on a self-hosted runner.
+          pip3 install --user --break-system-packages -r platform/ship/requirements.txt
+          echo "PYTHONPATH=$(python3 -m site --user-site):$GITHUB_WORKSPACE/platform/ship" >> "$GITHUB_ENV"
+
+      - name: Enqueue the approval request for the daemon to announce
+        run: |
+          python3 -m shiplib.release_ready_cli \
             --project "${{ inputs.project_slug }}" \
+            --repo "${{ github.repository }}" \
             --git-sha "${{ inputs.git_sha }}" \
             --artifact-sha256 "${{ inputs.artifact_sha256 }}" \
             --change-summary "${{ inputs.change_summary }}"
-      # NOTE (2026-09-13): `shiplib.release_ready_cli` is documented in
-      # docs/SHIP_TELEGRAM_APPROVAL.md as the next piece to write once a
-      # real bot token exists -- it wires ShipTelegramBot.announce_
-      # release_ready() (already built and tested, see telegram/
-      # approval_bot/bot.py + tests/test_telegram_bot.py) to a real
-      # TelegramClient and to a persisted ApprovalStore (a JSON file next
-      # to state.json, not the in-memory one used in tests). Deliberately
-      # NOT built as a CLI yet -- see docs/SHIP_V0_ARCHITECTURE.md "Known
-      # gaps": doing so without a real token to test against would be a
-      # guess, not a build.
