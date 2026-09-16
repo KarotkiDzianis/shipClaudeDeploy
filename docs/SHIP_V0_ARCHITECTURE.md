@@ -111,18 +111,34 @@ so a future session knows exactly where to pick up rather than guessing:
    webhook/polling receiver that would turn a button tap into
    `ShipTelegramBot.handle_callback()`. That receiver, `release_ready_cli`,
    and wiring a real Telegram-gated project remain the next, separate step.
-3. **A self-hosted runner is being registered on the real prod VM**
-   (the same VM TradePulse and another bot already run on — Dzianis's
-   explicit decision, confirmed 2026-09-13: one isolated systemd unit per
-   project, restart always scoped to that one named service, never the
-   VM itself; see `registry/targets.yml`'s own header and
-   `deploy/ship-sandbox.service`). Setup is one script Dzianis runs
-   himself on the VM (`deploy/setup_main_vm_runner.sh` — sudoers scoped
-   to exactly `systemctl restart ship-sandbox.service`, nothing else;
-   Claude never SSHes in, per Rule 10). Known limitation, not fixed here:
-   the runner registers against the ship-sandbox REPO specifically — a
-   future project in its own separate repo will need its own
-   registration, or an org-level runner pool, when it actually onboards.
+3. **RESOLVED 2026-09-16 — FIRST REAL END-TO-END DEPLOY SUCCEEDED.** A
+   self-hosted runner is registered on the real prod VM (the same VM
+   TradePulse and another bot already run on — Dzianis's explicit
+   decision: one isolated systemd unit per project, restart always
+   scoped to that one named service, never the VM itself; setup was one
+   script Dzianis ran himself, `deploy/setup_main_vm_runner.sh` — Claude
+   never SSHed in, per Rule 10). A real push to `ship-sandbox`'s `main`
+   went commit → CI (validate/test/build, GitHub-hosted) → deploy
+   (install/verify/switch/restart/health, self-hosted) → confirmed live
+   on the VM (`curl http://127.0.0.1:8091/` returned the exact deployed
+   git sha). Three real bugs were found and fixed getting here, each
+   would have failed 100% of the time otherwise:
+   - `uses: owner/repo/file.yml@<sha>` requires the FULL 40-char commit
+     SHA — a short SHA is rejected outright ("reference to workflow
+     should be either a valid branch, tag, or commit").
+   - `actions/setup-python@v5` has no prebuilt binary for Debian 12 on a
+     self-hosted runner (GitHub's tool-cache only covers specific hosted
+     OSes) — switched the deploy job to the VM's own system `python3` +
+     `pip3 install --user --break-system-packages` instead.
+   - `actions/download-artifact@v4` changed its no-`path:` default vs.
+     v3: it extracts straight into `$GITHUB_WORKSPACE`, not a subfolder
+     named after the artifact — needed an explicit `path:`.
+   Known limitation, not fixed here: the runner registers against the
+   ship-sandbox REPO specifically — a future project in its own separate
+   repo will need its own registration, or an org-level runner pool,
+   when it actually onboards. Not yet exercised: auto-rollback on a real
+   VM (built + unit-tested, see `tests/test_release.py`, but never
+   triggered against this real runner/service).
 4. **RESOLVED 2026-09-13**: a real, dedicated Ship bot token exists
    (`SHIP_CLAUDE_DEPLOY_BOT` in `~/claude/.env`, distinct from
    TradePulse's own `TRAIDZ_BOT_TOKEN` and the unrelated
