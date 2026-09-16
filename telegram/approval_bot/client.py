@@ -31,12 +31,20 @@ class TelegramClient:
     def answer_callback_query(self, callback_query_id, text: str = None) -> dict:
         return self._post("answerCallbackQuery", {"callback_query_id": callback_query_id, "text": text})
 
-    def get_updates(self, offset: int = 0, timeout: int = 10) -> dict:
-        """Long-poll for new updates (callback_query events included).
-        `timeout` is Telegram's own long-poll wait (seconds), not just an
-        HTTP client timeout -- the request itself blocks server-side until
-        an update arrives or this elapses."""
-        clean = {"offset": offset, "timeout": timeout, "allowed_updates": json.dumps(["callback_query"])}
+    def get_updates(self, offset: int = 0, timeout: int = 10, allowed_updates: list = None) -> dict:
+        """Long-poll for new updates. `timeout` is Telegram's own
+        long-poll wait (seconds), not just an HTTP client timeout -- the
+        request itself blocks server-side until an update arrives or this
+        elapses. `allowed_updates` defaults to None (Telegram's own
+        default: all update types) -- restricting it to just
+        ["callback_query"] would also make Telegram STOP delivering
+        plain messages on every later call, including ones from a
+        different script/purpose (confirmed: this is what silently broke
+        scripts/get_telegram_user_id.py, which needs plain messages, not
+        button taps)."""
+        clean = {"offset": offset, "timeout": timeout}
+        if allowed_updates is not None:
+            clean["allowed_updates"] = json.dumps(allowed_updates)
         resp = requests.get(f"{self._base}/getUpdates", params=clean, timeout=timeout + 10)
         resp.raise_for_status()
         return resp.json()
