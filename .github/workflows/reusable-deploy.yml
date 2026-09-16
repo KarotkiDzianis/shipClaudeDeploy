@@ -57,11 +57,18 @@ jobs:
           ref: ${{ env.SHIP_REF }}
           path: platform/ship
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install Ship
-        run: pip install -r platform/ship/requirements.txt
+      - name: Install Ship's own Python deps (system python3, not actions/setup-python)
+        run: |
+          # actions/setup-python downloads a prebuilt Python from GitHub's
+          # tool cache, which only covers specific hosted-runner OSes --
+          # confirmed failing here with "not found for Debian 12" on this
+          # self-hosted VM. Use whatever python3 is already on this
+          # persistent machine instead (it's already running TradePulse).
+          # --user + --break-system-packages keeps this out of the VM's
+          # system-wide site-packages (Debian's PEP 668 guard) without
+          # requiring python3-venv to be installed.
+          pip3 install --user --break-system-packages -r platform/ship/requirements.txt
+          echo "PYTHONPATH=$(python3 -m site --user-site):$GITHUB_WORKSPACE/platform/ship" >> "$GITHUB_ENV"
 
       - name: Download the exact artifact this release_id was approved for
         uses: actions/download-artifact@v4
@@ -70,13 +77,13 @@ jobs:
 
       - name: Re-validate against the central registry (fail closed)
         run: |
-          PYTHONPATH=platform/ship python3 -m shiplib.registry_check \
+          python3 -m shiplib.registry_check \
             --project "${{ inputs.project_slug }}" \
             --git-sha "${{ inputs.git_sha }}"
 
       - name: Install + verify + switch + restart + health (atomic, auto-rollback on any failure)
         run: |
-          PYTHONPATH=platform/ship python3 platform/ship/deploy/run_deploy_cli.py \
+          python3 platform/ship/deploy/run_deploy_cli.py \
             --project "${{ inputs.project_slug }}" \
             --repo "${{ github.repository }}" \
             --git-sha "${{ inputs.git_sha }}" \
@@ -94,5 +101,5 @@ jobs:
           SHIP_TELEGRAM_BOT_TOKEN: ${{ secrets.SHIP_TELEGRAM_BOT_TOKEN }}
           SHIP_TELEGRAM_CHAT_ID: ${{ secrets.SHIP_TELEGRAM_CHAT_ID }}
         run: |
-          PYTHONPATH=platform/ship python3 -m shiplib.deploy_result_cli \
+          python3 -m shiplib.deploy_result_cli \
             --project "${{ inputs.project_slug }}"
