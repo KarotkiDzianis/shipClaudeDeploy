@@ -74,6 +74,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ship-artifact-${{ inputs.project_slug }}
+          # v4 changed the default vs. v3: with no `path:`, it downloads
+          # directly into $GITHUB_WORKSPACE, not into a subfolder named
+          # after the artifact -- confirmed failing here with
+          # FileNotFoundError before this explicit path was added.
+          path: ship-artifact-${{ inputs.project_slug }}
 
       - name: Re-validate against the central registry (fail closed)
         run: |
