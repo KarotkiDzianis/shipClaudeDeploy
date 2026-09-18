@@ -59,7 +59,7 @@ class TestShipTelegramBot(unittest.TestCase):
         announced = self.bot.announce_release_ready("demo", "me/demo", "sha1", "r1", "72ac110d", "✅ tests", [])
         self.client.calls.clear()
 
-        result = self.bot.handle_callback("demo", "r1", announced["nonce"], 111, "approved", "cbq1")
+        result = self.bot.handle_callback("demo", announced["nonce"], 111, "approved", "cbq1")
         self.assertEqual(result["decision"], "approved")
         methods = [c[0] for c in self.client.calls]
         self.assertEqual(methods, ["edit_message_text", "unpin_chat_message", "answer_callback_query"])
@@ -70,17 +70,17 @@ class TestShipTelegramBot(unittest.TestCase):
         announced = self.bot.announce_release_ready("demo", "me/demo", "sha1", "r1", "72ac110d", "✅ tests", [])
         self.client.calls.clear()
 
-        result = self.bot.handle_callback("demo", "r1", announced["nonce"], 999, "approved", "cbq1")
+        result = self.bot.handle_callback("demo", announced["nonce"], 999, "approved", "cbq1")
         self.assertEqual(result["status"], "rejected")
         methods = [c[0] for c in self.client.calls]
         self.assertEqual(methods, ["answer_callback_query"])  # only acknowledges the tap, nothing else
 
     def test_duplicate_click_does_not_edit_a_second_time(self):
         announced = self.bot.announce_release_ready("demo", "me/demo", "sha1", "r1", "72ac110d", "✅ tests", [])
-        self.bot.handle_callback("demo", "r1", announced["nonce"], 111, "approved", "cbq1")
+        self.bot.handle_callback("demo", announced["nonce"], 111, "approved", "cbq1")
         self.client.calls.clear()
 
-        self.bot.handle_callback("demo", "r1", announced["nonce"], 111, "approved", "cbq2")
+        self.bot.handle_callback("demo", announced["nonce"], 111, "approved", "cbq2")
         methods = [c[0] for c in self.client.calls]
         self.assertEqual(methods, ["answer_callback_query"])  # idempotent repeat: no second edit/unpin
 
@@ -102,7 +102,7 @@ class TestShipTelegramBot(unittest.TestCase):
         release_root = Path(tempfile.mkdtemp())
         bot = ShipTelegramBot(self.client, self.store, chat_id=-100, release_root=release_root)
         announced = bot.announce_release_ready("demo", "me/demo", "sha1", "r1", "72ac110d", "✅ tests", [])
-        bot.handle_callback("demo", "r1", announced["nonce"], 111, "approved", "cbq1")
+        bot.handle_callback("demo", announced["nonce"], 111, "approved", "cbq1")
 
         recorded = load_decision(release_root, "demo")
         self.assertIsNotNone(recorded)
@@ -113,7 +113,7 @@ class TestShipTelegramBot(unittest.TestCase):
         """Existing bot usage (no release_root) must keep working exactly
         as before -- persistence is opt-in, not a silent new requirement."""
         announced = self.bot.announce_release_ready("demo", "me/demo", "sha1", "r1", "72ac110d", "✅ tests", [])
-        result = self.bot.handle_callback("demo", "r1", announced["nonce"], 111, "approved", "cbq1")
+        result = self.bot.handle_callback("demo", announced["nonce"], 111, "approved", "cbq1")
         self.assertEqual(result["decision"], "approved")  # no crash, no persistence attempted
 
 

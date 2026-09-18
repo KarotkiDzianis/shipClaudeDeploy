@@ -13,7 +13,22 @@ import requests
 
 class TelegramClient:
     def __init__(self, token: str, base_url: str = "https://api.telegram.org"):
+        self._token = token
         self._base = f"{base_url}/bot{token}"
+
+    def _scrub(self, exc: Exception) -> Exception:
+        """The token lives IN the request URL (Telegram's own API shape
+        -- there's no way around that), so any raised exception --
+        connection errors, HTTPError from a 4xx/5xx, anything -- embeds
+        it unless caught here. Confirmed leaking into a systemd journal
+        (readable via `journalctl`, no special privilege) via a 400 from
+        a malformed sendMessage call before this existed -- never again:
+        every real HTTP call in this class goes through this."""
+        safe_message = str(exc).replace(self._token, "***REDACTED***")
+        try:
+            return type(exc)(safe_message)
+        except Exception:
+            return RuntimeError(safe_message)
 
     def send_message(self, chat_id, text, reply_markup=None) -> dict:
         return self._post("sendMessage", {"chat_id": chat_id, "text": text, "reply_markup": reply_markup})
@@ -45,12 +60,18 @@ class TelegramClient:
         clean = {"offset": offset, "timeout": timeout}
         if allowed_updates is not None:
             clean["allowed_updates"] = json.dumps(allowed_updates)
-        resp = requests.get(f"{self._base}/getUpdates", params=clean, timeout=timeout + 10)
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = requests.get(f"{self._base}/getUpdates", params=clean, timeout=timeout + 10)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            raise self._scrub(e) from None
 
     def _post(self, method: str, payload: dict) -> dict:
         clean = {k: v for k, v in payload.items() if v is not None}
-        resp = requests.post(f"{self._base}/{method}", json=clean, timeout=10)
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = requests.post(f"{self._base}/{method}", json=clean, timeout=10)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            raise self._scrub(e) from None

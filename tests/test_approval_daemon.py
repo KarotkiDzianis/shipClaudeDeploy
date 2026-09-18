@@ -102,7 +102,7 @@ class TestProcessUpdates(unittest.TestCase):
             "update_id": 5,
             "callback_query": {
                 "id": "cbq1", "from": {"id": 111},
-                "data": f"ship:demo:sha1:{announced['nonce']}:approved",
+                "data": f"ship:demo:{announced['nonce']}:approved",
             },
         }]
         offset_file = self.tmp / "offset.txt"

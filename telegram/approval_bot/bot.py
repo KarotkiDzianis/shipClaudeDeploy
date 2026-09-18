@@ -46,20 +46,24 @@ class ShipTelegramBot:
         approval = self.store.create_pending(project, repo, git_sha, release_id)
         text = _release_ready_text(project, repo, git_sha, current_sha, test_summary, change_summary)
         self._base_texts[project] = text
-        buttons = self._buttons(project, release_id, approval.nonce)
+        buttons = self._buttons(project, approval.nonce)
         sent = self.client.send_message(self.chat_id, text, reply_markup=buttons)
         message_id = sent["result"]["message_id"]
         self.store.set_message_id(project, message_id)
         self.client.pin_chat_message(self.chat_id, message_id)
         return {"message_id": message_id, "nonce": approval.nonce, "release_id": release_id}
 
-    def handle_callback(self, project: str, release_id: str, nonce: str, telegram_user_id: int,
+    def handle_callback(self, project: str, nonce: str, telegram_user_id: int,
                         decision: str, callback_query_id: str) -> dict:
         """§20/§24: on a valid, non-repeat decision -- EDIT the same
         message to its terminal state and unpin it. A repeat click
         (idempotent_repeat=True) or a rejection edits nothing (§24:
-        duplicate click idempotent, old/superseded button rejected)."""
-        result = self.store.decide(project, release_id, nonce, telegram_user_id, decision)
+        duplicate click idempotent, old/superseded button rejected).
+        Note: the callback payload carries only (project, nonce,
+        decision), not the full release_id -- ApprovalStore.decide()
+        looks up the authoritative release_id/git_sha server-side by
+        project+nonce (see that method's own docstring for why)."""
+        result = self.store.decide(project, nonce, telegram_user_id, decision)
         if result["status"] == "ok" and not result["idempotent_repeat"]:
             approval = self.store.get_pending(project)
             base_text = self._base_texts.get(project, "")
@@ -74,11 +78,17 @@ class ShipTelegramBot:
         return result
 
     @staticmethod
-    def _buttons(project: str, release_id: str, nonce: str) -> dict:
+    def _buttons(project: str, nonce: str) -> dict:
+        """Telegram rejects a button whose callback_data exceeds 64
+        BYTES total -- confirmed failing for real (400 Bad Request) with
+        the original format that also embedded the full 40-char
+        git_sha as release_id. Dropping it here is safe: the server
+        already knows the release_id for this exact nonce (see
+        ApprovalStore.decide())."""
         def payload(decision):
-            return f"ship:{project}:{release_id}:{nonce}:{decision}"
+            return f"ship:{project}:{nonce}:{decision}"
         return {"inline_keyboard": [[
             {"text": "🚀 РАСКАТИТЬ", "callback_data": payload("approved")},
             {"text": "⛔ БЛОКИРОВАТЬ", "callback_data": payload("blocked")},
-            {"text": "ℹ️ ИНФО", "callback_data": f"ship:{project}:{release_id}:{nonce}:info"},
+            {"text": "ℹ️ ИНФО", "callback_data": payload("info")},
         ]]}

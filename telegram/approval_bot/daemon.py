@@ -14,7 +14,11 @@ Two responsibilities, one loop:
      running on the SAME self-hosted VM -- see reusable-release.yml's
      `runs-on`) -- call announce_release_ready(), then delete the file.
   2. Long-poll Telegram getUpdates for callback_query events -- parse
-     "ship:{project}:{release_id}:{nonce}:{decision}", call
+     "ship:{project}:{nonce}:{decision}" (kept short: Telegram rejects a
+     button whose callback_data exceeds 64 bytes -- a full git_sha
+     release_id doesn't fit alongside project+nonce+decision, and isn't
+     needed here anyway since the nonce alone is enough to look up the
+     pending approval's own release_id server-side), call
      handle_callback(). The offset is persisted so a restart never
      replays old updates.
 
@@ -80,10 +84,10 @@ def process_updates(bot: ShipTelegramBot, client: TelegramClient, offset_file: P
         if not cq:
             continue
         parts = (cq.get("data") or "").split(":")
-        if len(parts) != 5 or parts[0] != "ship":
+        if len(parts) != 4 or parts[0] != "ship":
             continue
-        _, project, release_id, nonce, decision = parts
-        result = bot.handle_callback(project, release_id, nonce, cq["from"]["id"], decision, cq["id"])
+        _, project, nonce, decision = parts
+        result = bot.handle_callback(project, nonce, cq["from"]["id"], decision, cq["id"])
         print(f"callback: project={project} decision={decision} -> {result}", flush=True)
     _save_offset(offset_file, offset)
 
