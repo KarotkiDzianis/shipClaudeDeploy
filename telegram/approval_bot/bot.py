@@ -87,8 +87,10 @@ class ShipTelegramBot:
         ApprovalStore.decide())."""
         def payload(decision):
             return f"ship:{project}:{nonce}:{decision}"
+        # Emoji-only labels: Dzianis's feedback -- three text+emoji
+        # buttons on one row get truncated in Telegram's UI ("РА...ТИТЬ").
         return {"inline_keyboard": [[
-            {"text": "🚀 РАСКАТИТЬ", "callback_data": payload("approved")},
-            {"text": "⛔ БЛОКИРОВАТЬ", "callback_data": payload("blocked")},
-            {"text": "ℹ️ ИНФО", "callback_data": payload("info")},
+            {"text": "🚀", "callback_data": payload("approved")},
+            {"text": "⛔", "callback_data": payload("blocked")},
+            {"text": "ℹ️", "callback_data": payload("info")},
         ]]}
