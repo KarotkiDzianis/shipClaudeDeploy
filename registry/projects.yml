@@ -24,10 +24,14 @@ ship-sandbox:
   target: main-vm
   service: ship-sandbox.service
   # approval is a CENTRAL REGISTRY decision (see deploy/run_deploy_cli.py)
-  # -- this project's own project.yml cannot grant itself this. Disposable
-  # sandbox project, explicitly no human in the loop by design (2026-09-13,
-  # first real Ship V0 E2E test, see that project's own CLAUDE.md).
-  approval: automatic
+  # -- this project's own project.yml cannot grant itself this.
+  # TEMPORARILY set to telegram (2026-09-18) to prove the real approval
+  # daemon + button tap end to end, now that it's running on the VM --
+  # was `automatic` for the first mechanical E2E test (2026-09-13-16).
+  # Flip back to `automatic` once this is confirmed working, since
+  # ship-sandbox has no human in the loop by design otherwise (see that
+  # project's own CLAUDE.md).
+  approval: telegram
 
 tradepulse:
   path: projects/commercial/tradepulse
