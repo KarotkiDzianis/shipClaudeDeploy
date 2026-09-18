@@ -88,10 +88,25 @@ def process_updates(bot: ShipTelegramBot, client: TelegramClient, offset_file: P
     _save_offset(offset_file, offset)
 
 
+def resolve_approver_ids(raw: str) -> set:
+    """Parses the required SHIP_ALLOWED_APPROVER_IDS env value (comma-
+    separated numeric Telegram user ids) into a set of ints. Kept
+    explicit in the environment file itself -- e.g.
+    `SHIP_ALLOWED_APPROVER_IDS=$TELEGRAM_CHAT_ID_DZIANIS` (they're the
+    same number for a private 1-on-1 chat) -- rather than a silent
+    default here, so anyone reading the config sees exactly who can
+    approve/block without also reading this file. See deploy/
+    setup_approval_daemon.sh's own header for the exact env file format,
+    which uses a bash `source` (real $VAR expansion) rather than
+    systemd's own EnvironmentFile= (a literal KEY=VALUE parser with no
+    expansion at all)."""
+    return {int(x) for x in raw.split(",") if x.strip()}
+
+
 def main() -> int:
     token = os.environ["SHIP_CLAUDE_DEPLOY_BOT"]
     chat_id = os.environ["TELEGRAM_CHAT_ID_DZIANIS"]
-    approvers = {int(x) for x in os.environ["SHIP_ALLOWED_APPROVER_IDS"].split(",") if x.strip()}
+    approvers = resolve_approver_ids(os.environ["SHIP_ALLOWED_APPROVER_IDS"])
     release_root = Path(os.environ["SHIP_RELEASE_ROOT"])
 
     client = TelegramClient(token)

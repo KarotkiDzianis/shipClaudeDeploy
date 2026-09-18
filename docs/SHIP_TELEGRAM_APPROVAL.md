@@ -100,9 +100,12 @@ surface than the original plan (see `SHIP_SECURITY.md`).
   on the VM yet, so `get_updates()`/`handle_callback()` are tested only
   against a fake client (`tests/test_approval_daemon.py`,
   `tests/test_telegram_bot.py`).
-- `SHIP_ALLOWED_APPROVER_IDS` needs Dzianis's real numeric Telegram user
-  id (not the chat id) — obtained once from `getUpdates` after messaging
-  the bot, from his own machine (see the setup script's own header).
+- `SHIP_ALLOWED_APPROVER_IDS` is set in `/etc/ship/telegram.env` as
+  `$TELEGRAM_CHAT_ID_DZIANIS` (a private 1-on-1 chat's `chat_id` and the
+  user's own numeric id are the same number, so no separate lookup is
+  needed) — expanded by bash when the daemon's systemd unit sources the
+  file, not by systemd's own `EnvironmentFile=` (a literal parser with no
+  `$VAR` expansion at all — see the setup script's own header).
 - The persistent Ship dashboard (§21) and pending-release reminders
   (§22) — designed, not built; thin extensions of the same
   edit-not-recreate pattern already proven in `bot.py`.

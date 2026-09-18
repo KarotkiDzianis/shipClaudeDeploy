@@ -7,19 +7,23 @@
 # project.
 #
 # BEFORE running this, create /etc/ship/telegram.env yourself (never via
-# Claude, never in git) with exactly these four lines:
+# Claude, never in git) with these four lines:
 #
 #   SHIP_CLAUDE_DEPLOY_BOT=<the real bot token from ~/claude/.env>
 #   TELEGRAM_CHAT_ID_DZIANIS=<the real chat id from ~/claude/.env>
-#   SHIP_ALLOWED_APPROVER_IDS=<your numeric Telegram user id, comma-separated if more than one>
+#   SHIP_ALLOWED_APPROVER_IDS=$TELEGRAM_CHAT_ID_DZIANIS
 #   SHIP_RELEASE_ROOT=/srv/apps
 #
-# Your numeric Telegram user id (NOT the bot token, NOT the chat id) is
-# needed because the approval state machine allow-lists WHO may tap
-# approve/block (§24) -- get it by messaging the bot once, then checking
-# https://api.telegram.org/bot<TOKEN>/getUpdates in a browser and reading
-# the "from":{"id": ...} field of your own message. Do this from your own
-# machine, never paste the token into a shared chat.
+# SHIP_ALLOWED_APPROVER_IDS restricts who may tap approve/block (§24) --
+# written as a literal `$VAR` reference on purpose: for a private 1-on-1
+# chat with the bot, Telegram's chat_id IS your own numeric user id
+# (they're the same number), so there's no separate value to look up.
+# This file is sourced by bash below (real $VAR expansion), NOT loaded
+# via systemd's own EnvironmentFile= (that's a plain KEY=VALUE parser
+# with no expansion at all -- it would keep the literal string
+# "$TELEGRAM_CHAT_ID_DZIANIS", not resolve it). Only replace this line
+# with actual comma-separated ids if more than one person should be able
+# to approve, or if this bot's chat is ever not a private 1-on-1 chat.
 #
 # Usage (as a user with sudo, e.g. karotki_dzianis):
 #   sudo bash setup_approval_daemon.sh
@@ -58,9 +62,8 @@ After=network.target
 [Service]
 Type=simple
 User=${RUNNER_USER}
-EnvironmentFile=${ENV_FILE}
 WorkingDirectory=${INSTALL_DIR}
-ExecStart=/usr/bin/python3 ${INSTALL_DIR}/telegram/approval_bot/daemon.py
+ExecStart=/bin/bash -c 'set -a; source ${ENV_FILE}; exec /usr/bin/python3 ${INSTALL_DIR}/telegram/approval_bot/daemon.py'
 Restart=on-failure
 RestartSec=5
 

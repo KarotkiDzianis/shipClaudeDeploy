@@ -140,5 +140,13 @@ class TestProcessUpdates(unittest.TestCase):
         self.assertEqual(captured["offset"], 42)
 
 
+class TestResolveApproverIds(unittest.TestCase):
+    def test_parses_a_single_id(self):
+        self.assertEqual(daemon.resolve_approver_ids("12345"), {12345})
+
+    def test_parses_multiple_comma_separated_ids(self):
+        self.assertEqual(daemon.resolve_approver_ids("111,222, 333"), {111, 222, 333})
+
+
 if __name__ == "__main__":
     unittest.main()
