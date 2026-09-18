@@ -44,6 +44,8 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 echo "== 1/3: platform/ship checkout =="
+mkdir -p "$INSTALL_DIR"
+chown "${RUNNER_USER}:${RUNNER_USER}" "$INSTALL_DIR"
 if [ -d "$INSTALL_DIR/.git" ]; then
   sudo -u "${RUNNER_USER}" git -C "$INSTALL_DIR" pull --ff-only
 else
