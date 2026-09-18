@@ -43,7 +43,12 @@ def main() -> int:
     client = TelegramClient(token)
 
     try:
-        updates = client.get_updates(offset=0, timeout=0)
+        # Explicitly ask for "message" -- an earlier bug in this script
+        # made one real call with allowed_updates=["callback_query"],
+        # which Telegram appears to "stick" server-side across later
+        # calls that don't pass the parameter at all. Passing a wider
+        # list here forces it back open.
+        updates = client.get_updates(offset=0, timeout=0, allowed_updates=["message", "callback_query"])
     except Exception as e:
         safe = str(e).replace(token, "***REDACTED***")
         print(f"ISSUE: could not reach api.telegram.org: {safe}")
